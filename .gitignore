@@ -1,0 +1,58 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Local data
+data/raw/*
+data/staging/*
+data/processed/*
+data/quarantine/*
+data/reference/*
+
+# Generated outputs
+outputs/*
+logs/*
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Model/cache files
+*.bin
+*.pt
+*.pth
+*.safetensors
+*.onnx
+
+# Temporary files
+*.tmp
+*.temp
