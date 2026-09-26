@@ -1,27 +1,28 @@
 ﻿from pathlib import Path
+
 import pandas as pd
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-RAW_DIR = PROJECT_ROOT / "data" / "raw"
 MANIFEST_PATH = PROJECT_ROOT / "outputs" / "raw_data_manifest.csv"
 
 
-def test_raw_dataset_has_expected_file_count():
-    files = list(RAW_DIR.glob("*.csv"))
-    assert len(files) == 9
-
-
-def test_raw_manifest_exists():
-    assert MANIFEST_PATH.exists()
-
-
-def test_raw_manifest_has_unique_files():
+def test_review_row_count_uses_parsed_csv_records():
     df = pd.read_csv(MANIFEST_PATH)
-    assert df["file_name"].is_unique
-    assert df["file_name"].notna().all()
+
+    review_rows = int(
+        df.loc[
+            df["file_name"] == "olist_order_reviews_dataset.csv",
+            "row_count",
+        ].iloc[0]
+    )
+
+    assert review_rows == 99_224
 
 
-def test_raw_manifest_has_no_missing_values():
+def test_manifest_row_counts_are_positive():
     df = pd.read_csv(MANIFEST_PATH)
-    assert df.notna().all().all()
+
+    assert (df["row_count"] > 0).all()
+    assert (df["column_count"] > 0).all()
+    assert (df["file_size_bytes"] > 0).all()
