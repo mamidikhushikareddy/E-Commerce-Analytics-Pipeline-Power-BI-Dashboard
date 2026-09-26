@@ -1,0 +1,201 @@
+version: "1.0"
+
+rules:
+
+  - rule_id: RI-001
+    domain: referential_integrity
+    name: order_item_order_fk
+    severity: critical
+    description: Every order_item.order_id must exist in orders.order_id
+
+  - rule_id: RI-002
+    domain: referential_integrity
+    name: order_item_product_fk
+    severity: critical
+    description: Every order_item.product_id must exist in products.product_id
+
+  - rule_id: RI-003
+    domain: referential_integrity
+    name: order_item_seller_fk
+    severity: critical
+    description: Every order_item.seller_id must exist in sellers.seller_id
+
+  - rule_id: RI-004
+    domain: referential_integrity
+    name: payment_order_fk
+    severity: critical
+    description: Every payment.order_id must exist in orders.order_id
+
+  - rule_id: RI-005
+    domain: referential_integrity
+    name: review_order_fk
+    severity: critical
+    description: Every review.order_id must exist in orders.order_id
+
+  - rule_id: RI-006
+    domain: referential_integrity
+    name: order_customer_fk
+    severity: critical
+    description: Every orders.customer_id must exist in customers.customer_id
+
+  - rule_id: GRAIN-001
+    domain: uniqueness
+    name: order_id_unique
+    severity: critical
+    description: order_id must be unique in orders
+
+  - rule_id: GRAIN-002
+    domain: uniqueness
+    name: order_item_composite_key
+    severity: critical
+    description: order_id + order_item_id must be unique
+
+  - rule_id: GRAIN-003
+    domain: uniqueness
+    name: payment_composite_key
+    severity: critical
+    description: order_id + payment_sequential must be unique
+
+  - rule_id: GRAIN-004
+    domain: uniqueness
+    name: review_composite_key
+    severity: critical
+    description: review_id + order_id must be unique
+
+  - rule_id: GRAIN-005
+    domain: uniqueness
+    name: product_id_unique
+    severity: critical
+    description: product_id must be unique in products
+
+  - rule_id: GRAIN-006
+    domain: uniqueness
+    name: seller_id_unique
+    severity: critical
+    description: seller_id must be unique in sellers
+
+  - rule_id: GRAIN-007
+    domain: uniqueness
+    name: customer_id_unique
+    severity: critical
+    description: customer_id must be unique in customers
+
+  - rule_id: COMP-001
+    domain: completeness
+    name: order_purchase_timestamp
+    severity: critical
+    description: order_purchase_timestamp must not be null
+
+  - rule_id: COMP-002
+    domain: completeness
+    name: order_estimated_delivery_date
+    severity: critical
+    description: order_estimated_delivery_date must not be null
+
+  - rule_id: COMP-003
+    domain: completeness
+    name: review_score
+    severity: critical
+    description: review_score must not be null
+
+  - rule_id: COMP-004
+    domain: completeness
+    name: payment_value
+    severity: critical
+    description: payment_value must not be null
+
+  - rule_id: COMP-005
+    domain: completeness
+    name: order_item_price
+    severity: critical
+    description: price must not be null
+
+  - rule_id: COMP-006
+    domain: completeness
+    name: order_item_freight
+    severity: critical
+    description: freight_value must not be null
+
+  - rule_id: VAL-001
+    domain: validity
+    name: review_score_range
+    severity: critical
+    description: review_score must be between 1 and 5 inclusive
+
+  - rule_id: VAL-002
+    domain: validity
+    name: price_non_negative
+    severity: critical
+    description: price must be greater than or equal to zero
+
+  - rule_id: VAL-003
+    domain: validity
+    name: freight_non_negative
+    severity: critical
+    description: freight_value must be greater than or equal to zero
+
+  - rule_id: VAL-004
+    domain: validity
+    name: payment_non_negative
+    severity: critical
+    description: payment_value must be greater than or equal to zero
+
+  - rule_id: TIME-001
+    domain: temporal_integrity
+    name: approved_after_purchase
+    severity: warning
+    description: order_approved_at should not precede order_purchase_timestamp
+
+  - rule_id: TIME-002
+    domain: temporal_integrity
+    name: carrier_after_approved
+    severity: warning
+    description: order_delivered_carrier_date should not precede order_approved_at
+
+  - rule_id: TIME-003
+    domain: temporal_integrity
+    name: customer_delivery_after_carrier
+    severity: warning
+    description: order_delivered_customer_date should not precede order_delivered_carrier_date
+
+  - rule_id: TIME-004
+    domain: temporal_integrity
+    name: estimated_after_purchase
+    severity: warning
+    description: order_estimated_delivery_date should not precede order_purchase_timestamp
+
+  - rule_id: TIME-005
+    domain: temporal_integrity
+    name: review_answer_after_creation
+    severity: warning
+    description: review_answer_timestamp should not precede review_creation_date
+
+  - rule_id: TIME-006
+    domain: temporal_integrity
+    name: shipping_limit_after_purchase
+    severity: warning
+    description: shipping_limit_date should not precede order_purchase_timestamp
+
+  - rule_id: REC-001
+    domain: reconciliation
+    name: order_payment_reconciliation
+    severity: warning
+    description: Order-level item value plus freight should be reconciled against total payment value and exceptions investigated
+
+  - rule_id: GEO-001
+    domain: reference_integrity
+    name: customer_geolocation_mapping
+    severity: warning
+    description: Customer ZIP prefix should map to the geolocation reference
+
+  - rule_id: GEO-002
+    domain: reference_integrity
+    name: seller_geolocation_mapping
+    severity: warning
+    description: Seller ZIP prefix should map to the geolocation reference
+
+  - rule_id: REF-001
+    domain: reference_integrity
+    name: product_category_translation
+    severity: warning
+    description: Populated product categories should map to the translation reference
