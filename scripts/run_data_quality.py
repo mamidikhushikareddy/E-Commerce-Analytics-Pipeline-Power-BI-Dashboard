@@ -5,6 +5,10 @@ from src.quality.dq_results import (
     save_results,
 )
 from src.quality.dq_runner import run_dq
+from src.quality.dq_summary import (
+    build_summary,
+    save_summary,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -12,12 +16,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = PROJECT_ROOT / "data" / "raw"
 EXECUTION_CONFIG = PROJECT_ROOT / "configs" / "dq_execution.yaml"
 RULES_CONFIG = PROJECT_ROOT / "configs" / "dq_rules.yaml"
-OUTPUT_PATH = (
-    PROJECT_ROOT
-    / "outputs"
-    / "data_quality"
-    / "dq_results.csv"
-)
+
+OUTPUT_DIR = PROJECT_ROOT / "outputs" / "data_quality"
+
+RESULTS_OUTPUT_PATH = OUTPUT_DIR / "dq_results.csv"
+SUMMARY_OUTPUT_PATH = OUTPUT_DIR / "dq_baseline_summary.json"
 
 
 def main() -> None:
@@ -33,21 +36,43 @@ def main() -> None:
 
     save_results(
         governed_results,
-        OUTPUT_PATH,
+        RESULTS_OUTPUT_PATH,
     )
 
-    print(f"Rules executed: {len(governed_results)}")
+    summary = build_summary(governed_results)
+
+    save_summary(
+        summary,
+        SUMMARY_OUTPUT_PATH,
+    )
+
     print(
-        f"PASS: {(governed_results['status'] == 'PASS').sum()}"
+        f"Rules executed: {summary['rules_executed']}"
     )
     print(
-        f"FAIL: {(governed_results['status'] == 'FAIL').sum()}"
+        f"PASS: {summary['pass_count']}"
     )
     print(
-        "Critical failures: "
-        f"{((governed_results['status'] == 'FAIL') & (governed_results['severity'] == 'critical')).sum()}"
+        f"FAIL: {summary['fail_count']}"
     )
-    print(f"Results written to: {OUTPUT_PATH}")
+    print(
+        f"Critical failures: "
+        f"{summary['critical_failure_count']}"
+    )
+    print(
+        f"Warning failures: "
+        f"{summary['warning_failure_count']}"
+    )
+    print(
+        "Affected records summed across failed rules: "
+        f"{summary['affected_records_sum_across_rules']}"
+    )
+    print(
+        f"Results written to: {RESULTS_OUTPUT_PATH}"
+    )
+    print(
+        f"Baseline summary written to: {SUMMARY_OUTPUT_PATH}"
+    )
 
 
 if __name__ == "__main__":
