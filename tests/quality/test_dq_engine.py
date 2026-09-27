@@ -5,12 +5,12 @@ import pytest
 import pandas as pd
 
 from src.quality.dq_engine import (
+    evaluate_minimum,
     evaluate_not_null,
+    evaluate_range,
     evaluate_unique,
     load_rules,
-    evaluate_range,
 )
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RULES_PATH = PROJECT_ROOT / "configs" / "dq_rules.yaml"
@@ -236,4 +236,57 @@ def test_evaluate_range_raises_for_missing_column():
             column="missing_column",
             minimum=1,
             maximum=5,
+        )
+
+def test_evaluate_minimum_passes_valid_values():
+    df = pd.DataFrame({"value": [0, 1, 2]})
+
+    result = evaluate_minimum(
+        df,
+        rule_id="TEST-012",
+        column="value",
+        minimum=0,
+    )
+
+    assert result["status"] == "PASS"
+    assert result["affected_records"] == 0
+
+
+def test_evaluate_minimum_fails_values_below_threshold():
+    df = pd.DataFrame({"value": [0, 1, -1, -5]})
+
+    result = evaluate_minimum(
+        df,
+        rule_id="TEST-013",
+        column="value",
+        minimum=0,
+    )
+
+    assert result["status"] == "FAIL"
+    assert result["affected_records"] == 2
+
+
+def test_evaluate_minimum_ignores_null_values():
+    df = pd.DataFrame({"value": [0, None, 2]})
+
+    result = evaluate_minimum(
+        df,
+        rule_id="TEST-014",
+        column="value",
+        minimum=0,
+    )
+
+    assert result["status"] == "PASS"
+    assert result["affected_records"] == 0
+
+
+def test_evaluate_minimum_raises_for_missing_column():
+    df = pd.DataFrame({"value": [0, 1, 2]})
+
+    with pytest.raises(KeyError):
+        evaluate_minimum(
+            df,
+            rule_id="TEST-015",
+            column="missing_column",
+            minimum=0,
         )

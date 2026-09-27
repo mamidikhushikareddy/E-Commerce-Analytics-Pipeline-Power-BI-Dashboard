@@ -155,3 +155,32 @@ def evaluate_range(
             else 0.0
         ),
     }
+def evaluate_minimum(
+    df,
+    rule_id: str,
+    column: str,
+    minimum: float,
+) -> dict:
+    """Evaluate whether non-null values meet a minimum threshold."""
+    if column not in df.columns:
+        raise KeyError(f"Column not found: {column}")
+
+    invalid_mask = (
+        df[column].notna()
+        & (df[column] < minimum)
+    )
+
+    affected_records = int(invalid_mask.sum())
+    total_records = len(df)
+
+    return {
+        "rule_id": rule_id,
+        "status": "PASS" if affected_records == 0 else "FAIL",
+        "total_records": total_records,
+        "affected_records": affected_records,
+        "affected_pct": (
+            (affected_records / total_records) * 100
+            if total_records
+            else 0.0
+        ),
+    }
