@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.quality.dq_engine import load_rules
+
 
 RESULT_COLUMNS = [
     "rule_id",
@@ -13,6 +15,13 @@ RESULT_COLUMNS = [
     "affected_pct",
     "evaluator",
     "dataset",
+]
+
+GOVERNANCE_COLUMNS = [
+    "domain",
+    "name",
+    "severity",
+    "description",
 ]
 
 
@@ -50,6 +59,53 @@ def validate_results(results: pd.DataFrame) -> None:
         )
 
 
+def enrich_results_with_rule_metadata(
+    results: pd.DataFrame,
+    rules_path: Path,
+) -> pd.DataFrame:
+    """Attach governed rule metadata to executed DQ results."""
+    validate_results(results)
+
+    rules = load_rules(rules_path)
+
+    metadata = pd.DataFrame(
+        rules,
+        columns=[
+            "rule_id",
+            *GOVERNANCE_COLUMNS,
+        ],
+    )
+
+    result_rule_ids = set(results["rule_id"])
+    registry_rule_ids = set(metadata["rule_id"])
+
+    missing_metadata = sorted(
+        result_rule_ids - registry_rule_ids
+    )
+
+    if missing_metadata:
+        raise ValueError(
+            "DQ results contain rule IDs missing from the "
+            f"governed registry: {missing_metadata}"
+        )
+
+    enriched = results.merge(
+        metadata,
+        on="rule_id",
+        how="left",
+        validate="one_to_one",
+    )
+
+    if enriched[GOVERNANCE_COLUMNS].isna().any().any():
+        raise ValueError(
+            "Governance metadata is incomplete for one or more DQ results."
+        )
+
+    return enriched[
+        RESULT_COLUMNS + GOVERNANCE_COLUMNS
+    ]
+
+
 def save_results(
     results: pd.DataFrame,
     output_path: Path,
@@ -62,7 +118,13 @@ def save_results(
         exist_ok=True,
     )
 
-    results[RESULT_COLUMNS].to_csv(
+    columns_to_save = RESULT_COLUMNS + [
+        column
+        for column in GOVERNANCE_COLUMNS
+        if column in results.columns
+    ]
+
+    results[columns_to_save].to_csv(
         output_path,
         index=False,
     )
