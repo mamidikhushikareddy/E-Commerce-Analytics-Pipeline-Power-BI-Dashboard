@@ -319,3 +319,42 @@ def evaluate_temporal_order(
             else 0.0
         ),
     }
+def evaluate_reconciliation(
+    df,
+    rule_id: str,
+    expected_column: str,
+    actual_column: str,
+    tolerance: float,
+) -> dict:
+    """Evaluate whether expected and actual values reconcile within tolerance."""
+    if expected_column not in df.columns:
+        raise KeyError(f"Expected column not found: {expected_column}")
+
+    if actual_column not in df.columns:
+        raise KeyError(f"Actual column not found: {actual_column}")
+
+    comparable_mask = (
+        df[expected_column].notna()
+        & df[actual_column].notna()
+    )
+
+    difference = (
+        df[expected_column] - df[actual_column]
+    ).abs()
+
+    invalid_mask = comparable_mask & (difference >= tolerance)
+
+    affected_records = int(invalid_mask.sum())
+    total_records = int(comparable_mask.sum())
+
+    return {
+        "rule_id": rule_id,
+        "status": "PASS" if affected_records == 0 else "FAIL",
+        "total_records": total_records,
+        "affected_records": affected_records,
+        "affected_pct": (
+            (affected_records / total_records) * 100
+            if total_records
+            else 0.0
+        ),
+    }

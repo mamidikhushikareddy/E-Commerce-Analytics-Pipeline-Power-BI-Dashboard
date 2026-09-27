@@ -13,6 +13,7 @@ from src.quality.dq_engine import (
     evaluate_unique,
     load_rules,
     evaluate_temporal_order,
+    evaluate_reconciliation,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -496,4 +497,78 @@ def test_evaluate_temporal_order_raises_for_missing_column():
             rule_id="TEST-027",
             earlier_column="purchase",
             later_column="approved",
+        )
+def test_evaluate_reconciliation_passes_within_tolerance():
+    df = pd.DataFrame(
+        {
+            "expected": [100.00, 200.00, 300.005],
+            "actual": [100.00, 200.01, 300.00],
+        }
+    )
+
+    result = evaluate_reconciliation(
+        df,
+        rule_id="TEST-028",
+        expected_column="expected",
+        actual_column="actual",
+        tolerance=0.01,
+    )
+
+    assert result["status"] == "PASS"
+    assert result["affected_records"] == 0
+
+
+def test_evaluate_reconciliation_fails_outside_tolerance():
+    df = pd.DataFrame(
+        {
+            "expected": [100.00, 200.00, 300.00],
+            "actual": [100.00, 205.00, 300.00],
+        }
+    )
+
+    result = evaluate_reconciliation(
+        df,
+        rule_id="TEST-029",
+        expected_column="expected",
+        actual_column="actual",
+        tolerance=0.01,
+    )
+
+    assert result["status"] == "FAIL"
+    assert result["affected_records"] == 1
+
+
+def test_evaluate_reconciliation_ignores_incomplete_pairs():
+    df = pd.DataFrame(
+        {
+            "expected": [100.00, None, 300.00],
+            "actual": [100.00, 200.00, None],
+        }
+    )
+
+    result = evaluate_reconciliation(
+        df,
+        rule_id="TEST-030",
+        expected_column="expected",
+        actual_column="actual",
+        tolerance=0.01,
+    )
+
+    assert result["status"] == "PASS"
+    assert result["total_records"] == 1
+    assert result["affected_records"] == 0
+
+
+def test_evaluate_reconciliation_raises_for_missing_column():
+    df = pd.DataFrame(
+        {"expected": [100.00] }
+    )
+
+    with pytest.raises(KeyError):
+        evaluate_reconciliation(
+            df,
+            rule_id="TEST-031",
+            expected_column="expected",
+            actual_column="actual",
+            tolerance=0.01,
         )
