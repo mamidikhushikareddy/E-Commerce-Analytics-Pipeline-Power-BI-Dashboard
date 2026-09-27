@@ -8,6 +8,7 @@ from src.quality.dq_engine import (
     evaluate_not_null,
     evaluate_unique,
     load_rules,
+    evaluate_range,
 )
 
 
@@ -179,4 +180,60 @@ def test_evaluate_unique_raises_for_missing_column():
             df,
             rule_id="TEST-007",
             columns=["missing_column"],
+        )
+def test_evaluate_range_passes_valid_values():
+    df = pd.DataFrame({"score": [1, 3, 5]})
+
+    result = evaluate_range(
+        df,
+        rule_id="TEST-008",
+        column="score",
+        minimum=1,
+        maximum=5,
+    )
+
+    assert result["status"] == "PASS"
+    assert result["affected_records"] == 0
+
+
+def test_evaluate_range_fails_out_of_range_values():
+    df = pd.DataFrame({"score": [1, 3, 5, 0, 6]})
+
+    result = evaluate_range(
+        df,
+        rule_id="TEST-009",
+        column="score",
+        minimum=1,
+        maximum=5,
+    )
+
+    assert result["status"] == "FAIL"
+    assert result["affected_records"] == 2
+
+
+def test_evaluate_range_ignores_null_values():
+    df = pd.DataFrame({"score": [1, None, 5]})
+
+    result = evaluate_range(
+        df,
+        rule_id="TEST-010",
+        column="score",
+        minimum=1,
+        maximum=5,
+    )
+
+    assert result["status"] == "PASS"
+    assert result["affected_records"] == 0
+
+
+def test_evaluate_range_raises_for_missing_column():
+    df = pd.DataFrame({"score": [1, 2, 3]})
+
+    with pytest.raises(KeyError):
+        evaluate_range(
+            df,
+            rule_id="TEST-011",
+            column="missing_column",
+            minimum=1,
+            maximum=5,
         )

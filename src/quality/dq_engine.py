@@ -121,3 +121,37 @@ def evaluate_unique(
             else 0.0
         ),
     }
+
+def evaluate_range(
+    df,
+    rule_id: str,
+    column: str,
+    minimum: float,
+    maximum: float,
+) -> dict:
+    """Evaluate whether values fall within an inclusive numeric range."""
+    if column not in df.columns:
+        raise KeyError(f"Column not found: {column}")
+
+    invalid_mask = (
+        df[column].notna()
+        & (
+            (df[column] < minimum)
+            | (df[column] > maximum)
+        )
+    )
+
+    affected_records = int(invalid_mask.sum())
+    total_records = len(df)
+
+    return {
+        "rule_id": rule_id,
+        "status": "PASS" if affected_records == 0 else "FAIL",
+        "total_records": total_records,
+        "affected_records": affected_records,
+        "affected_pct": (
+            (affected_records / total_records) * 100
+            if total_records
+            else 0.0
+        ),
+    }
