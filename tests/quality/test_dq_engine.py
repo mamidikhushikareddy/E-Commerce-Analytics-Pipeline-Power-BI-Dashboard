@@ -5,6 +5,7 @@ import pytest
 import pandas as pd
 
 from src.quality.dq_engine import (
+    evaluate_allowed_values,
     evaluate_minimum,
     evaluate_not_null,
     evaluate_range,
@@ -351,4 +352,62 @@ def test_reference_integrity_raises_for_missing_column():
             rule_id="TEST-019",
             child_column="missing_column",
             parent_column="id",
+        )
+def test_evaluate_allowed_values_passes_valid_domain():
+    df = pd.DataFrame(
+        {"status": ["delivered", "shipped", "canceled"]}
+    )
+
+    result = evaluate_allowed_values(
+        df,
+        rule_id="TEST-020",
+        column="status",
+        allowed_values={"delivered", "shipped", "canceled"},
+    )
+
+    assert result["status"] == "PASS"
+    assert result["affected_records"] == 0
+
+
+def test_evaluate_allowed_values_fails_unknown_value():
+    df = pd.DataFrame(
+        {"status": ["delivered", "shipped", "unknown"]}
+    )
+
+    result = evaluate_allowed_values(
+        df,
+        rule_id="TEST-021",
+        column="status",
+        allowed_values={"delivered", "shipped", "canceled"},
+    )
+
+    assert result["status"] == "FAIL"
+    assert result["affected_records"] == 1
+
+
+def test_evaluate_allowed_values_ignores_null_values():
+    df = pd.DataFrame(
+        {"status": ["delivered", None, "shipped"]}
+    )
+
+    result = evaluate_allowed_values(
+        df,
+        rule_id="TEST-022",
+        column="status",
+        allowed_values={"delivered", "shipped"},
+    )
+
+    assert result["status"] == "PASS"
+    assert result["affected_records"] == 0
+
+
+def test_evaluate_allowed_values_raises_for_missing_column():
+    df = pd.DataFrame({"status": ["delivered"]})
+
+    with pytest.raises(KeyError):
+        evaluate_allowed_values(
+            df,
+            rule_id="TEST-023",
+            column="missing_column",
+            allowed_values={"delivered"},
         )
