@@ -63,5 +63,27 @@ def load_rules(rules_path: Path) -> list[dict]:
             )
 
     return rules
+def evaluate_not_null(
+    df,
+    rule_id: str,
+    column: str,
+) -> dict:
+    """Evaluate whether a column contains null values."""
+    if column not in df.columns:
+        raise KeyError(f"Column not found: {column}")
 
+    missing_count = int(df[column].isna().sum())
+    total_count = len(df)
+
+    return {
+        "rule_id": rule_id,
+        "status": "PASS" if missing_count == 0 else "FAIL",
+        "total_records": total_count,
+        "affected_records": missing_count,
+        "affected_pct": (
+            (missing_count / total_count) * 100
+            if total_count
+            else 0.0
+        ),
+    }
 
