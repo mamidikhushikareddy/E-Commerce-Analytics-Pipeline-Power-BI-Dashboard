@@ -2,9 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from src.quality.dq_engine import load_rules, evaluate_not_null
-
 import pandas as pd
+
+from src.quality.dq_engine import (
+    evaluate_not_null,
+    evaluate_unique,
+    load_rules,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -79,4 +83,100 @@ def test_evaluate_not_null_raises_for_missing_column():
             df,
             rule_id="TEST-003",
             column="missing_column",
+        )
+
+def test_evaluate_unique_passes_unique_column():
+    df = pd.DataFrame({"id": [1, 2, 3]})
+
+    result = evaluate_unique(
+        df,
+        rule_id="TEST-004",
+        columns=["id"],
+    )
+
+    assert result["status"] == "PASS"
+    assert result["affected_records"] == 0
+
+
+def test_evaluate_unique_fails_duplicate_column():
+    df = pd.DataFrame({"id": [1, 2, 2, 3]})
+
+    result = evaluate_unique(
+        df,
+        rule_id="TEST-005",
+        columns=["id"],
+    )
+
+    assert result["status"] == "FAIL"
+    assert result["affected_records"] == 2
+    assert result["affected_pct"] == 50.0
+
+
+def test_evaluate_unique_supports_composite_key():
+    df = pd.DataFrame(
+        {
+            "order_id": ["A", "A", "B"],
+            "item_id": [1, 2, 1],
+        }
+    )
+
+    result = evaluate_unique(
+        df,
+        rule_id="TEST-006",
+        columns=["order_id", "item_id"],
+    )
+
+    assert result["status"] == "PASS"
+def test_evaluate_unique_passes_unique_column():
+    df = pd.DataFrame({"id": [1, 2, 3]})
+
+    result = evaluate_unique(
+        df,
+        rule_id="TEST-004",
+        columns=["id"],
+    )
+
+    assert result["status"] == "PASS"
+    assert result["affected_records"] == 0
+
+
+def test_evaluate_unique_fails_duplicate_column():
+    df = pd.DataFrame({"id": [1, 2, 2, 3]})
+
+    result = evaluate_unique(
+        df,
+        rule_id="TEST-005",
+        columns=["id"],
+    )
+
+    assert result["status"] == "FAIL"
+    assert result["affected_records"] == 2
+    assert result["affected_pct"] == 50.0
+
+
+def test_evaluate_unique_supports_composite_key():
+    df = pd.DataFrame(
+        {
+            "order_id": ["A", "A", "B"],
+            "item_id": [1, 2, 1],
+        }
+    )
+
+    result = evaluate_unique(
+        df,
+        rule_id="TEST-006",
+        columns=["order_id", "item_id"],
+    )
+
+    assert result["status"] == "PASS"
+
+
+def test_evaluate_unique_raises_for_missing_column():
+    df = pd.DataFrame({"id": [1, 2, 3]})
+
+    with pytest.raises(KeyError):
+        evaluate_unique(
+            df,
+            rule_id="TEST-007",
+            columns=["missing_column"],
         )

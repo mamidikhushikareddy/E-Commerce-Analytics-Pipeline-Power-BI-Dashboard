@@ -87,3 +87,37 @@ def evaluate_not_null(
         ),
     }
 
+def evaluate_unique(
+    df,
+    rule_id: str,
+    columns: list[str],
+) -> dict:
+    """Evaluate whether a column or composite key is unique."""
+    missing_columns = [
+        column for column in columns if column not in df.columns
+    ]
+
+    if missing_columns:
+        raise KeyError(
+            f"Columns not found: {missing_columns}"
+        )
+
+    duplicate_mask = df.duplicated(
+        subset=columns,
+        keep=False,
+    )
+
+    affected_records = int(duplicate_mask.sum())
+    total_records = len(df)
+
+    return {
+        "rule_id": rule_id,
+        "status": "PASS" if affected_records == 0 else "FAIL",
+        "total_records": total_records,
+        "affected_records": affected_records,
+        "affected_pct": (
+            (affected_records / total_records) * 100
+            if total_records
+            else 0.0
+        ),
+    }
