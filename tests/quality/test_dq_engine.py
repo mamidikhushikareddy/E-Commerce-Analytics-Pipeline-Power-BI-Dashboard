@@ -8,6 +8,7 @@ from src.quality.dq_engine import (
     evaluate_minimum,
     evaluate_not_null,
     evaluate_range,
+    evaluate_reference_integrity,
     evaluate_unique,
     load_rules,
 )
@@ -289,4 +290,65 @@ def test_evaluate_minimum_raises_for_missing_column():
             rule_id="TEST-015",
             column="missing_column",
             minimum=0,
+        )
+
+def test_reference_integrity_passes_valid_keys():
+    child_df = pd.DataFrame({"parent_id": ["A", "B", "C"]})
+    parent_df = pd.DataFrame({"id": ["A", "B", "C"]})
+
+    result = evaluate_reference_integrity(
+        child_df,
+        parent_df,
+        rule_id="TEST-016",
+        child_column="parent_id",
+        parent_column="id",
+    )
+
+    assert result["status"] == "PASS"
+    assert result["affected_records"] == 0
+
+
+def test_reference_integrity_fails_orphan_keys():
+    child_df = pd.DataFrame({"parent_id": ["A", "B", "X"]})
+    parent_df = pd.DataFrame({"id": ["A", "B", "C"]})
+
+    result = evaluate_reference_integrity(
+        child_df,
+        parent_df,
+        rule_id="TEST-017",
+        child_column="parent_id",
+        parent_column="id",
+    )
+
+    assert result["status"] == "FAIL"
+    assert result["affected_records"] == 1
+
+
+def test_reference_integrity_ignores_null_foreign_keys():
+    child_df = pd.DataFrame({"parent_id": ["A", None, "B"]})
+    parent_df = pd.DataFrame({"id": ["A", "B"]})
+
+    result = evaluate_reference_integrity(
+        child_df,
+        parent_df,
+        rule_id="TEST-018",
+        child_column="parent_id",
+        parent_column="id",
+    )
+
+    assert result["status"] == "PASS"
+    assert result["affected_records"] == 0
+
+
+def test_reference_integrity_raises_for_missing_column():
+    child_df = pd.DataFrame({"parent_id": ["A", "B"]})
+    parent_df = pd.DataFrame({"id": ["A", "B"]})
+
+    with pytest.raises(KeyError):
+        evaluate_reference_integrity(
+            child_df,
+            parent_df,
+            rule_id="TEST-019",
+            child_column="missing_column",
+            parent_column="id",
         )

@@ -184,3 +184,73 @@ def evaluate_minimum(
             else 0.0
         ),
     }
+def evaluate_reference_integrity(
+    child_df,
+    parent_df,
+    rule_id: str,
+    child_column: str,
+    parent_column: str,
+) -> dict:
+    """Evaluate whether child foreign-key values exist in the parent dataset."""
+    if child_column not in child_df.columns:
+        raise KeyError(f"Child column not found: {child_column}")
+
+    if parent_column not in parent_df.columns:
+        raise KeyError(f"Parent column not found: {parent_column}")
+
+    parent_keys = set(parent_df[parent_column].dropna())
+
+    invalid_mask = (
+        child_df[child_column].notna()
+        & ~child_df[child_column].isin(parent_keys)
+    )
+
+    affected_records = int(invalid_mask.sum())
+    total_records = len(child_df)
+
+    return {
+        "rule_id": rule_id,
+        "status": "PASS" if affected_records == 0 else "FAIL",
+        "total_records": total_records,
+        "affected_records": affected_records,
+        "affected_pct": (
+            (affected_records / total_records) * 100
+            if total_records
+            else 0.0
+        ),
+    }
+def evaluate_reference_integrity(
+    child_df,
+    parent_df,
+    rule_id: str,
+    child_column: str,
+    parent_column: str,
+) -> dict:
+    """Evaluate whether child foreign-key values exist in the parent dataset."""
+    if child_column not in child_df.columns:
+        raise KeyError(f"Child column not found: {child_column}")
+
+    if parent_column not in parent_df.columns:
+        raise KeyError(f"Parent column not found: {parent_column}")
+
+    parent_keys = set(parent_df[parent_column].dropna())
+
+    invalid_mask = (
+        child_df[child_column].notna()
+        & ~child_df[child_column].isin(parent_keys)
+    )
+
+    affected_records = int(invalid_mask.sum())
+    total_records = len(child_df)
+
+    return {
+        "rule_id": rule_id,
+        "status": "PASS" if affected_records == 0 else "FAIL",
+        "total_records": total_records,
+        "affected_records": affected_records,
+        "affected_pct": (
+            (affected_records / total_records) * 100
+            if total_records
+            else 0.0
+        ),
+    }
