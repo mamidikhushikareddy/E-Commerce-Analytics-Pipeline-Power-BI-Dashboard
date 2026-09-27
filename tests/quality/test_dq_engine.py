@@ -12,6 +12,7 @@ from src.quality.dq_engine import (
     evaluate_reference_integrity,
     evaluate_unique,
     load_rules,
+    evaluate_temporal_order,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -410,4 +411,89 @@ def test_evaluate_allowed_values_raises_for_missing_column():
             rule_id="TEST-023",
             column="missing_column",
             allowed_values={"delivered"},
+        )
+def test_evaluate_temporal_order_passes_valid_sequence():
+    df = pd.DataFrame(
+        {
+            "purchase": pd.to_datetime(
+                ["2024-01-01", "2024-01-02"]
+            ),
+            "approved": pd.to_datetime(
+                ["2024-01-01", "2024-01-03"]
+            ),
+        }
+    )
+
+    result = evaluate_temporal_order(
+        df,
+        rule_id="TEST-024",
+        earlier_column="purchase",
+        later_column="approved",
+    )
+
+    assert result["status"] == "PASS"
+    assert result["affected_records"] == 0
+
+
+def test_evaluate_temporal_order_fails_invalid_sequence():
+    df = pd.DataFrame(
+        {
+            "purchase": pd.to_datetime(
+                ["2024-01-01", "2024-01-05"]
+            ),
+            "approved": pd.to_datetime(
+                ["2024-01-02", "2024-01-04"]
+            ),
+        }
+    )
+
+    result = evaluate_temporal_order(
+        df,
+        rule_id="TEST-025",
+        earlier_column="purchase",
+        later_column="approved",
+    )
+
+    assert result["status"] == "FAIL"
+    assert result["affected_records"] == 1
+
+
+def test_evaluate_temporal_order_ignores_missing_timestamps():
+    df = pd.DataFrame(
+        {
+            "purchase": pd.to_datetime(
+                ["2024-01-01", None]
+            ),
+            "approved": pd.to_datetime(
+                ["2024-01-02", "2024-01-03"]
+            ),
+        }
+    )
+
+    result = evaluate_temporal_order(
+        df,
+        rule_id="TEST-026",
+        earlier_column="purchase",
+        later_column="approved",
+    )
+
+    assert result["status"] == "PASS"
+    assert result["affected_records"] == 0
+
+
+def test_evaluate_temporal_order_raises_for_missing_column():
+    df = pd.DataFrame(
+        {
+            "purchase": pd.to_datetime(
+                ["2024-01-01"]
+            )
+        }
+    )
+
+    with pytest.raises(KeyError):
+        evaluate_temporal_order(
+            df,
+            rule_id="TEST-027",
+            earlier_column="purchase",
+            later_column="approved",
         )
