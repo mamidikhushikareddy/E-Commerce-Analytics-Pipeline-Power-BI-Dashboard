@@ -1,335 +1,166 @@
-from pathlib import Path
+version: "1.0"
 
-import pandas as pd
+mart:
+  name: mart_market_performance_monthly
 
+  purpose: >
+    Monthly customer ZIP-prefix market performance mart supporting
+    geographic demand, revenue, customer, and order analysis.
 
-class MarketPerformanceMartError(Exception):
-    """Raised when market performance mart construction fails."""
+  grain: one row per calendar month and customer ZIP-code prefix
 
+  business_key:
+    - month
+    - customer_zip_code_prefix
 
-REQUIRED_TABLES = {
-    "fact_order": [
-        "order_id",
-        "customer_id",
-        "order_purchase_timestamp",
-    ],
-    "fact_order_item": [
-        "order_id",
-        "price",
-        "freight_value",
-    ],
-    "dim_customer": [
-        "customer_id",
-        "customer_unique_id",
-        "customer_zip_code_prefix",
-    ],
-    "dim_date": [
-        "date",
-    ],
-}
+  source_tables:
+    - fact_order
+    - fact_order_item
+    - dim_customer
+    - dim_date
 
+  join_rules:
+    - >
+      fact_order.customer_id joins dim_customer.customer_id
+      using a many-to-one relationship.
+    - >
+      fact_order_item.order_id joins fact_order.order_id
+      using a many-to-one relationship.
+    - >
+      month is derived from fact_order.order_purchase_timestamp.
+    - >
+      dim_date is loaded and validated by the implementation;
+      it is not used as a join in the current transformation.
 
-OUTPUT_COLUMNS = [
-    "month",
-    "customer_zip_code_prefix",
-    "order_count",
-    "item_line_count",
-    "customer_count",
-    "revenue",
-    "freight_value",
-    "avg_order_value",
-    "revenue_per_customer",
-    "avg_freight_per_order",
-]
+  transformations:
+    - >
+      month is derived by converting
+      fact_order.order_purchase_timestamp to calendar month,
+      represented by the first day of that month.
+    - >
+      customer_zip_code_prefix is sourced from dim_customer.
+    - >
+      order_count is DISTINCT COUNT of order_id
+      within each month and ZIP-prefix market.
+    - >
+      item_line_count is COUNT of fact_order_item rows.
+    - >
+      customer_count is DISTINCT COUNT of customer_unique_id.
+    - >
+      revenue is SUM of fact_order_item.price.
+    - >
+      freight_value is SUM of fact_order_item.freight_value.
+    - >
+      avg_order_value is revenue divided by order_count.
+    - >
+      revenue_per_customer is revenue divided by customer_count.
+    - >
+      avg_freight_per_order is freight_value divided by order_count.
 
+  columns:
 
-def _load_warehouse_table(
-    warehouse_dir: str | Path,
-    table_name: str,
-) -> pd.DataFrame:
+    month:
+      dtype: date
+      nullable: false
+      role: business_key
+      source: derived from fact_order.order_purchase_timestamp
 
-    path = Path(warehouse_dir) / f"{table_name}.parquet"
+    customer_zip_code_prefix:
+      dtype: integer
+      nullable: false
+      role: business_key
+      source: dim_customer.customer_zip_code_prefix
 
-    if not path.exists():
-        raise MarketPerformanceMartError(
-            f"Warehouse table not found: {path}"
-        )
+    order_count:
+      dtype: integer
+      nullable: false
+      role: analytical_measure
+      source: fact_order.order_id
+      aggregation: distinct_count
 
-    return pd.read_parquet(path)
+    item_line_count:
+      dtype: integer
+      nullable: false
+      role: analytical_measure
+      source: fact_order_item.order_id
+      aggregation: count_rows
 
+    customer_count:
+      dtype: integer
+      nullable: false
+      role: analytical_measure
+      source: dim_customer.customer_unique_id
+      aggregation: distinct_count
 
-def _validate_required_columns(
-    df: pd.DataFrame,
-    table_name: str,
-) -> None:
+    revenue:
+      dtype: decimal
+      nullable: false
+      role: analytical_measure
+      source: fact_order_item.price
+      aggregation: sum
 
-    required_columns = REQUIRED_TABLES[table_name]
+    freight_value:
+      dtype: decimal
+      nullable: false
+      role: analytical_measure
+      source: fact_order_item.freight_value
+      aggregation: sum
 
-    missing = [
-        column
-        for column in required_columns
-        if column not in df.columns
-    ]
+    avg_order_value:
+      dtype: decimal
+      nullable: false
+      role: derived_measure
+      formula: revenue / order_count
 
-    if missing:
-        raise MarketPerformanceMartError(
-            f"{table_name} is missing required columns: {missing}"
-        )
+    revenue_per_customer:
+      dtype: decimal
+      nullable: false
+      role: derived_measure
+      formula: revenue / customer_count
 
+    avg_freight_per_order:
+      dtype: decimal
+      nullable: false
+      role: derived_measure
+      formula: freight_value / order_count
 
-def build_market_performance_monthly(
-    warehouse_dir: str | Path,
-) -> pd.DataFrame:
+  quality_rules:
+    - >
+      The combination of month and customer_zip_code_prefix
+      must be unique.
+    - >
+      month and customer_zip_code_prefix must not contain nulls.
+    - >
+      order_count, item_line_count, and customer_count
+      must be greater than zero.
+    - >
+      revenue and freight_value must be nonnegative.
+    - >
+      avg_order_value must equal revenue divided by order_count.
+    - >
+      revenue_per_customer must equal revenue divided
+      by customer_count.
+    - >
+      avg_freight_per_order must equal freight_value
+      divided by order_count.
+    - >
+      The customer and order-item joins must preserve
+      their respective source populations.
 
-    # ---------------------------------------------------------------
-    # Load warehouse tables
-    # ---------------------------------------------------------------
-
-    orders = _load_warehouse_table(
-        warehouse_dir,
-        "fact_order",
-    )
-
-    items = _load_warehouse_table(
-        warehouse_dir,
-        "fact_order_item",
-    )
-
-    customers = _load_warehouse_table(
-        warehouse_dir,
-        "dim_customer",
-    )
-
-    dates = _load_warehouse_table(
-        warehouse_dir,
-        "dim_date",
-    )
-
-    _validate_required_columns(
-        orders,
-        "fact_order",
-    )
-
-    _validate_required_columns(
-        items,
-        "fact_order_item",
-    )
-
-    _validate_required_columns(
-        customers,
-        "dim_customer",
-    )
-
-    _validate_required_columns(
-        dates,
-        "dim_date",
-    )
-
-    # ---------------------------------------------------------------
-    # Validate customer dimension grain
-    # ---------------------------------------------------------------
-
-    customer_attributes = customers[
-        [
-            "customer_id",
-            "customer_unique_id",
-            "customer_zip_code_prefix",
-        ]
-    ].copy()
-
-    if customer_attributes["customer_id"].duplicated().any():
-        raise MarketPerformanceMartError(
-            "dim_customer.customer_id is not unique."
-        )
-
-    if customer_attributes["customer_unique_id"].isna().any():
-        raise MarketPerformanceMartError(
-            "customer_unique_id contains null values."
-        )
-
-    if customer_attributes[
-        "customer_zip_code_prefix"
-    ].isna().any():
-        raise MarketPerformanceMartError(
-            "customer_zip_code_prefix contains null values."
-        )
-
-    # ---------------------------------------------------------------
-    # Attach customer identity and market to orders
-    #
-    # Relationship:
-    # fact_order MANY
-    #       ↓
-    # dim_customer ONE
-    # ---------------------------------------------------------------
-
-    order_customer = orders.merge(
-        customer_attributes,
-        on="customer_id",
-        how="inner",
-        validate="many_to_one",
-    )
-
-    if len(order_customer) != len(orders):
-        raise MarketPerformanceMartError(
-            "Customer dimension join changed the order population."
-        )
-
-    # ---------------------------------------------------------------
-    # Validate purchase timestamp
-    # ---------------------------------------------------------------
-
-    order_customer["order_purchase_timestamp"] = pd.to_datetime(
-        order_customer["order_purchase_timestamp"],
-        errors="raise",
-    )
-
-    # ---------------------------------------------------------------
-    # Derive calendar month
-    # ---------------------------------------------------------------
-
-    order_customer["month"] = (
-        order_customer["order_purchase_timestamp"]
-        .dt.to_period("M")
-        .dt.to_timestamp()
-    )
-
-    # ---------------------------------------------------------------
-    # Attach market/month information to order-item rows
-    #
-    # Relationship:
-    # fact_order_item MANY
-    #       ↓
-    # fact_order ONE
-    # ---------------------------------------------------------------
-
-    order_items = items.merge(
-        order_customer[
-            [
-                "order_id",
-                "customer_unique_id",
-                "customer_zip_code_prefix",
-                "month",
-            ]
-        ],
-        on="order_id",
-        how="inner",
-        validate="many_to_one",
-    )
-
-    if len(order_items) != len(items):
-        raise MarketPerformanceMartError(
-            "Order-item population changed when joining to orders."
-        )
-
-    # ---------------------------------------------------------------
-    # Market-month aggregation
-    # ---------------------------------------------------------------
-
-    mart = (
-        order_items
-        .groupby(
-            [
-                "month",
-                "customer_zip_code_prefix",
-            ],
-            as_index=False,
-        )
-        .agg(
-            order_count=(
-                "order_id",
-                "nunique",
-            ),
-            item_line_count=(
-                "order_id",
-                "size",
-            ),
-            customer_count=(
-                "customer_unique_id",
-                "nunique",
-            ),
-            revenue=(
-                "price",
-                "sum",
-            ),
-            freight_value=(
-                "freight_value",
-                "sum",
-            ),
-        )
-    )
-
-    # ---------------------------------------------------------------
-    # Derived commercial metrics
-    # ---------------------------------------------------------------
-
-    mart["avg_order_value"] = (
-        mart["revenue"]
-        / mart["order_count"]
-    )
-
-    mart["revenue_per_customer"] = (
-        mart["revenue"]
-        / mart["customer_count"]
-    )
-
-    mart["avg_freight_per_order"] = (
-        mart["freight_value"]
-        / mart["order_count"]
-    )
-
-    # ---------------------------------------------------------------
-    # Final grain validation
-    # ---------------------------------------------------------------
-
-    duplicate_count = int(
-        mart.duplicated(
-            [
-                "month",
-                "customer_zip_code_prefix",
-            ]
-        ).sum()
-    )
-
-    if duplicate_count != 0:
-        raise MarketPerformanceMartError(
-            "Market-month grain violated: "
-            f"{duplicate_count} duplicate rows."
-        )
-
-    # ---------------------------------------------------------------
-    # Metric validations
-    # ---------------------------------------------------------------
-
-    if mart["order_count"].le(0).any():
-        raise MarketPerformanceMartError(
-            "order_count contains non-positive values."
-        )
-
-    if mart["item_line_count"].le(0).any():
-        raise MarketPerformanceMartError(
-            "item_line_count contains non-positive values."
-        )
-
-    if mart["customer_count"].le(0).any():
-        raise MarketPerformanceMartError(
-            "customer_count contains non-positive values."
-        )
-
-    if mart["revenue"].lt(0).any():
-        raise MarketPerformanceMartError(
-            "revenue contains negative values."
-        )
-
-    if mart["freight_value"].lt(0).any():
-        raise MarketPerformanceMartError(
-            "freight_value contains negative values."
-        )
-
-    # ---------------------------------------------------------------
-    # Final column order
-    # ---------------------------------------------------------------
-
-    mart = mart[OUTPUT_COLUMNS].copy()
-
-    return mart
+  exclusions:
+    - >
+      Do not join fact_payment or fact_review into this mart,
+      as their separate grains may introduce measure fan-out.
+    - >
+      Do not interpret ZIP-code prefixes as exact geographic
+      boundaries or infer city-level performance from them.
+    - >
+      Do not create units-sold metrics because the source
+      dataset contains no explicit quantity field.
+    - >
+      Do not silently deduplicate, impute, or repair source records.
+    - >
+      Do not calculate growth rates, contribution percentages,
+      rankings, forecasts, or anomaly signals in this mart.
+    - >
+      Do not infer causal explanations for market performance.
