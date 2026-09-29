@@ -206,6 +206,7 @@ The decomposition bridge must reconcile to the observed revenue change within th
 - Sentiment rates use all text-bearing reviews as the denominator. Unknown sentiment classifications can therefore cause the three sentiment rates to sum to less than 100%.
 - Complaint rate uses all text-bearing reviews as the denominator, including reviews with unknown complaint classification.
 - Textless reviews remain without inferred sentiment or complaint classifications.
+- When a month has no text-bearing reviews, sentiment and complaint rates are set to missing (NA), not zero.
 - Complaint themes are available in the complaint-detection output but are not columns in the current monthly customer voice mart.
 - Sentiment model confidence is a model score and is not established as calibrated probability.
 - Complaint confidence is a deterministic evidence score, not a calibrated probability.
