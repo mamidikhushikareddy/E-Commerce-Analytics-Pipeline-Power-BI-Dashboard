@@ -1,425 +1,242 @@
-### An End-to-End E-Commerce Analytics, Data Quality & AI-Assisted Decision Intelligence Platform
-
-This project is an analytics engineering and decision-support project built on the **Olist Brazilian E-Commerce Public Dataset**. It transforms raw e-commerce data into validated analytical models, reusable business marts, revenue decomposition, customer voice insights, and AI-assisted decision reasoning.
-
-The project demonstrates how raw transactional data can be transformed into governed, testable, and decision-ready information for product, business, and analytics teams.
-
-## Project Objectives
-
-\- Build a reproducible data pipeline from raw datasets to analytical outputs.
-
-\- Implement dimensional modeling and a warehouse-style architecture.
-
-\- Establish explicit data quality rules and validation checks.
-
-\- Create customer, market, and product performance marts.
-
-\- Decompose revenue movements into interpretable components.
-
-\- Generate AI-assisted decision reasoning with evidence grounding and human review.
-
-\- Deliver business-facing dashboards through Power BI.
-
-## Key Capabilities
-
-### 1. Data Engineering & Analytics Architecture
-
-\- Raw data ingestion and staging across nine source CSV files.
-
-\- Warehouse-style fact and dimension tables.
-
-\- Reusable analytical marts at defined grains.
-
-\- Parquet-based analytical outputs.
-
-\- Data validation, grain checks, and persistence safeguards.
-
-\- Version-controlled source code, configurations, and tests.
-
-### 2. Dimensional Modeling
-
-The warehouse pipeline persists ten tables.
-
-| Table | Rows |
-
-|---|---:|
-
-| `fact_order` | 99,441 |
-
-| `fact_order_item` | 112,650 |
-
-| `fact_payment` | 103,886 |
-
-| `fact_review` | 99,224 |
-
-| `dim_date` | 1,561 |
-
-| `dim_customer` | 99,441 |
-
-| `dim_product` | 32,951 |
-
-| `dim_seller` | 3,095 |
-
-| `dim_category` | 71 |
-
-| `dim_geography` | 1,000,163 |
-
-These counts describe persisted table sizes, not necessarily distinct business entities in every table.
-
-### 3. Data Quality & Governance
-
-The project implements a configurable data quality framework with **44 rules**.
-
-It produces machine-readable results and summary artifacts for tracking rule outcomes, severity, and affected records.
-
-Latest verified execution:
-
-\- Rules evaluated: 44
-
-\- Passing rules: 38
-
-\- Failing rules: 6
-
-\- Critical failures: 0
-
-\- Warning-level failures: 6
-
-\- Affected records summed across rules: 2,058
-
-The six warning-level failures are retained and reported rather than hidden by weakening the checks or altering source data.
-
-Generated artifacts:
-
-\- `data/processed/quality/dq_results.csv`
-
-\- `data/processed/quality/dq_summary.json`
-
-### 4. Analytical Data Marts
-
-The project builds reusable outputs for different business questions.
-
-| Analytical output | Latest verified size |
-
-|---|---:|
-
-| Customer performance mart | 97,319 rows |
-
-| Market performance mart | 69,722 rows |
-
-| Product performance mart | 94,591 rows |
-
-| Product-market monthly mart | 102,171 rows |
-
-The marts include grain validation and persisted analytical outputs. Their row counts should be interpreted in the context of each mart's defined grain.
-
-### 5. Revenue Decomposition
-
-The revenue decomposition module produces a monthly analytical bridge for understanding revenue changes.
-
-Verified validation results:
-
-\- 24 monthly records.
-
-\- No duplicate monthly grain.
-
-\- Maximum reconciliation difference of approximately \\(9.79 \\times 10^{-11}\\).
-
-\- September 2018 identified as a partial month.
-
-The reconciliation check verifies the arithmetic consistency of the decomposition; it does not independently establish the business cause of every movement.
-
-### 6. Customer Voice Analytics
-
-The Customer Voice workflow processes review text and produces sentiment-oriented analytical outputs.
-
-A verified in-memory build processed 99,224 review records:
-
-\- Text-bearing reviews: 42,687
-
-\- Textless reviews: 56,537
-
-\- Sentiment predictions generated for text-bearing reviews: 42,687
-
-The latest rebuild was stopped by an existing-output overwrite safeguard. These figures describe the validated in-memory build and should not be interpreted as confirmation that the protected output file was regenerated.
-
-### 7. AI-Assisted Decision Intelligence
-
-The project includes an AI-assisted decision-reasoning workflow using a live language-model API.
-
-A verified reasoning batch produced six records, persisted in:
-
-`data/processed/marts/mart_llm_decision_reasoning.parquet`
-
-The batch passed checks for unique, non-null identifiers, evidence grounding, and human-review requirements.
-
-AI-generated reasoning is decision support, not an automatically approved business decision. Review and validation remain important.
-
-### 8. Power BI Dashboards
-
-The Power BI report is located at:
-
-`powerbi/Product_Pulse_AI.pbix`
-
-**Verified:** The report opened in Power BI Desktop, its dashboards were visible, and a manual refresh completed successfully.
-
-The report is maintained separately from the two Git commits documented below.
+# E-Commerce Analytics Pipeline & Power BI Dashboard
+
+End-to-end analytics engineering project on the **Olist Brazilian E-Commerce Public Dataset**. It turns nine raw CSV files into a dimensional warehouse, validated analytical marts, revenue decomposition, review sentiment analysis, AI-assisted decision reasoning, and a Power BI dashboard.
+
+![Python](https://img.shields.io/badge/Python-3.11-blue)
+![Tests](https://img.shields.io/badge/tests-539%20passed-brightgreen)
+![Power BI](https://img.shields.io/badge/Power%20BI-Dashboard-yellow)
+
+---
+
+## Table of Contents
+
+- [Highlights](#highlights)
+- [Architecture](#architecture)
+- [Key Components](#key-components)
+- [Tech Stack](#tech-stack)
+- [Repository Structure](#repository-structure)
+- [Getting Started](#getting-started)
+- [Running the Pipeline](#running-the-pipeline)
+- [Dataset](#dataset)
+- [Power BI Dashboard](#power-bi-dashboard)
+- [Limitations](#limitations)
+- [Roadmap](#roadmap)
+
+---
+
+## Highlights
+
+- **Dimensional warehouse** with 3 fact tables and 7 dimension tables (about 1.5M rows in total, including a 1M-row geography dimension)
+- **Data quality framework** with 44 configurable rules, severity levels, and machine-readable results
+- **4 analytical marts** (customer, market, product, product-market monthly) with grain validation
+- **Revenue decomposition** with a monthly bridge that reconciles to within about 1e-10
+- **Customer voice analysis** of 99,224 reviews, with sentiment predictions for the 42,687 that contain text
+- **AI-assisted decision reasoning** that is evidence-grounded and flagged for human review
+- **539 automated tests** (pytest)
+
+---
 
 ## Architecture
 
-```text
-
-Olist Raw CSV Dataset
-
-        |
-
-        v
-
-Staging & Source Validation
-
-        |
-
-        v
-
-Warehouse Fact and Dimension Tables
-
-        |
-
-        v
-
-Analytical Data Marts
-
-        |
-
-        +----------------------+
-
-        |                      |
-
-        v                      v
-
-Revenue Decomposition    Customer Voice
-
-        |                      |
-
-        +-----------+----------+
-
-                    |
-
-                    v
-
-       AI-Assisted Decision Reasoning
-
-                    |
-
-                    v
-
-          Power BI Dashboards
-
+```mermaid
+flowchart TD
+    A[Olist raw CSVs] --> B[Staging & source validation]
+    B --> C[Warehouse: fact & dimension tables]
+    C --> D[Analytical marts]
+    D --> E[Revenue decomposition]
+    D --> F[Customer voice / sentiment]
+    E --> G[AI-assisted decision reasoning]
+    F --> G
+    G --> H[Power BI dashboard]
 ```
 
-Cross-cutting capabilities include automated testing, configurable data quality rules, validation checks, and version control.
+Data quality checks, automated tests, and version control apply across all stages.
 
-This diagram represents the project's major processing stages rather than every runtime dependency.
+---
 
-## Technology Stack
+## Key Components
 
-\- **Language:** Python 3.11
+### 1. Dimensional Warehouse
 
-\- **Data processing:** Pandas, NumPy, PyArrow
+| Table | Rows |
+|---|---:|
+| `fact_order` | 99,441 |
+| `fact_order_item` | 112,650 |
+| `fact_payment` | 103,886 |
+| `fact_review` | 99,224 |
+| `dim_date` | 1,561 |
+| `dim_customer` | 99,441 |
+| `dim_product` | 32,951 |
+| `dim_seller` | 3,095 |
+| `dim_category` | 71 |
+| `dim_geography` | 1,000,163 |
 
-\- **Storage:** Parquet and CSV analytical artifacts
+### 2. Data Quality
 
-\- **Data architecture:** Staging, fact and dimension tables, analytical marts
+A configurable framework of **44 rules** writes its results to:
 
-\- **AI:** Language-model API integration and evidence-grounded reasoning
+- `data/processed/quality/dq_results.csv`
+- `data/processed/quality/dq_summary.json`
 
-\- **Business intelligence:** Microsoft Power BI
+Latest run: 38 rules pass and 6 fail. All 6 failures are warning-level (no critical failures) and affect 2,058 records in total. They are reported rather than hidden.
 
-\- **Testing:** pytest
+### 3. Analytical Marts
 
-\- **Configuration:** YAML
+| Mart | Rows |
+|---|---:|
+| Customer performance | 97,319 |
+| Market performance | 69,722 |
+| Product performance | 94,591 |
+| Product-market monthly | 102,171 |
 
-\- **Version control:** Git
+Row counts depend on each mart's defined grain.
+
+### 4. Revenue Decomposition
+
+A monthly bridge that explains revenue movement in interpretable components.
+
+- 24 monthly records, with no duplicate grain
+- Maximum reconciliation difference of about 9.79e-11
+- September 2018 is a partial month
+
+The reconciliation confirms the arithmetic is consistent. It does not by itself establish the business cause of each movement.
+
+### 5. Customer Voice Analytics
+
+Processes review text and produces sentiment predictions.
+
+- 99,224 reviews processed
+- 42,687 with text (all received a sentiment prediction)
+- 56,537 without text
+
+### 6. AI-Assisted Decision Reasoning
+
+Uses a language-model API to generate evidence-grounded reasoning. A verified batch of 6 records is stored at `data/processed/marts/mart_llm_decision_reasoning.parquet` and passed checks for unique IDs, evidence grounding, and human-review flags.
+
+AI output is decision support, not an approved business decision, so human review is required.
+
+---
+
+## Tech Stack
+
+| Area | Tools |
+|---|---|
+| Language | Python 3.11 |
+| Data processing | Pandas, NumPy, PyArrow |
+| Storage | Parquet, CSV |
+| Modeling | Staging layer, star schema, analytical marts |
+| AI | Language-model API |
+| BI | Microsoft Power BI |
+| Testing | pytest |
+| Config | YAML |
+
+---
 
 ## Repository Structure
 
-```text
-
-PRODUCT-PULSE-AI/
-
-├── configs/          # Project and data quality configuration
-
-├── data/
-
-│   ├── raw/          # Source CSV files
-
-│   └── processed/    # Quality, warehouse and analytical outputs
-
-├── docs/             # Project documentation and runbook
-
-├── logs/             # Execution logs
-
-├── notebooks/        # Exploration and experimentation
-
-├── outputs/          # Validation and reporting artifacts
-
-├── powerbi/          # Power BI report
-
-├── scripts/          # Pipeline entry points and validation scripts
-
-├── sql/              # SQL assets
-
-├── src/              # Reusable project modules
-
-├── tests/            # Automated tests
-
-├── .gitignore
-
+```
+.
+├── configs/       # Project and data quality configuration (YAML)
+├── docs/          # Documentation and runbook (docs/RUNBOOK.md)
+├── scripts/       # Pipeline entry points and validation scripts
+├── src/           # Reusable project modules
+├── tests/         # Automated tests
+├── pyproject.toml
 └── README.md
-
 ```
 
-## Setup
+These folders are created locally when you run the project and are not stored in the repository: `data/raw/`, `data/processed/`, `logs/`, `outputs/`.
 
-Prerequisites:
+---
 
-\- Python 3.11
+## Getting Started
 
-\- Git
+**Prerequisites:** Python 3.11, Git, and Power BI Desktop (only to open the report).
 
-\- Power BI Desktop for the report
+```bash
+git clone https://github.com/mamidikhushikareddy/E-Commerce-Analytics-Pipeline-Power-BI-Dashboard.git
+cd E-Commerce-Analytics-Pipeline-Power-BI-Dashboard
 
-Clone the repository and enter the project directory:
+conda create -n ecommerce_analytics python=3.11 -y
+conda activate ecommerce_analytics
 
-```powershell
-
-git clone <YOUR_GITHUB_REPOSITORY_URL>
-
-cd PRODUCT-PULSE-AI
-
+pip install -e .
 ```
 
-Create and activate an environment:
+1. Download the dataset (see [Dataset](#dataset)) and place the nine CSV files in `data/raw/`.
+2. Only for the AI reasoning step, set your LLM API key as an environment variable. Check `configs/` and `docs/RUNBOOK.md` for the exact variable name.
 
-```powershell
-
-conda create -n product_pulse python=3.11 -y
-
-conda activate product_pulse
-
-```
-
-Install the project's dependencies using the repository's dependency manifest, if provided. Verify the required packages and external API configuration before running the pipeline.
-
-**Note:** This repository's current setup should be checked for a complete dependency manifest and documented API requirements before claiming a clean-machine, one-command installation.
+---
 
 ## Running the Pipeline
 
-The following commands were executed successfully in the development environment:
+Run the steps in this order:
 
-```powershell
-
+```bash
 python scripts/run_current_data_quality.py
-
 python scripts/run_staging.py
-
 python scripts/run_warehouse.py
-
 python scripts/run_customer_performance_mart.py
-
 python scripts/run_market_performance_mart.py
-
 python scripts/run_product_performance_mart.py
-
 python scripts/run_product_market_performance_monthly.py
-
 python scripts/run_revenue_decomposition.py
-
 python scripts/validate_revenue_decomposition.py
-
 ```
 
-Run the automated tests:
+Run the tests:
 
-```powershell
-
+```bash
 python -m pytest -q
-
 ```
 
-**Latest verified full-suite result:** 539 tests passed.
+> **Note:** The AI reasoning workflow makes live API calls, and the Customer Voice build will not overwrite existing outputs by default. See `docs/RUNBOOK.md` before re-running either.
 
-Check `docs/RUNBOOK.md` for the execution sequence and important safeguards.
-
-Some workflows depend on existing outputs or external API access. Review their configuration before rerunning them. In particular, the AI reasoning workflow can make live API calls, and the Customer Voice build has an overwrite safeguard.
+---
 
 ## Dataset
 
-**Source:** Olist Brazilian E-Commerce Public Dataset.
+- **Source:** [Olist Brazilian E-Commerce Public Dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) (Kaggle)
+- **Contents:** orders, customers, products, sellers, payments, reviews, and geolocation (nine CSV files)
+- **Period:** approximately September 2016 to September 2018
 
-The dataset contains Brazilian e-commerce transaction, customer, product, seller, payment, review, and geographic information.
+Follow the dataset provider's license and attribution terms if you redistribute the data.
 
-The project uses nine source CSV files. Follow the original dataset provider's terms and attribution requirements when redistributing data.
+---
 
-The dataset covers a historical period, with the analytical outputs spanning approximately September 2016 to September 2018. September 2018 is a partial month in the revenue decomposition output.
+## Power BI Dashboard
 
-## Git & Reproducibility
+The report file is `Product_Pulse_AI.pbix`. It is **not included in this repository** (it is untracked by Git). Add it under a `powerbi/` folder or link to it here once published.
 
-The current development repository includes these commits:
+<!-- Add dashboard screenshots here:
+![Dashboard overview](docs/images/dashboard_overview.png)
+-->
 
-\- `6dc5772` — Build Product Pulse AI analytics and decision pipeline
+The report opens in Power BI Desktop and refreshes successfully. Scheduled refresh and access controls have not been set up.
 
-\- `8dc14c5` — Document project execution and validation runbook
+---
 
-The project has passed its latest full automated test run and the documented revenue decomposition checks.
+## Limitations
 
-The Power BI report exists locally in `powerbi/` and is currently untracked by Git. If you publish this project, decide deliberately whether to keep the report outside Git, publish it separately, or use an appropriate large-file hosting approach.
+- Six warning-level data quality rules still fail and need investigation.
+- The Customer Voice rebuild was blocked by the overwrite safeguard, so the persisted output file was not regenerated.
+- The dataset is historical, not live operational data.
+- AI-generated reasoning always requires human review.
+- Business impact has not been measured; the use cases are decision support.
 
-## Business Value
+---
 
-The platform is designed to support questions such as:
+## Roadmap
 
-\- How are customer and product performance changing over time?
+- [ ] Provide a complete dependency manifest for one-command setup
+- [ ] Investigate and document the six failing data quality rules
+- [ ] Add data freshness checks and pipeline observability
+- [ ] Document metric definitions and the Power BI semantic model
+- [ ] Improve traceability from source evidence to reviewed AI decisions
+- [ ] Add dashboard screenshots and a business case study
 
-\- Which market segments contribute to revenue movements?
+---
 
-\- Are analytical outputs trustworthy enough for decision-making?
+## Author
 
-\- What themes and sentiment appear in customer reviews?
-
-\- What evidence supports an AI-generated recommendation?
-
-\- Which data quality failures require investigation before business use?
-
-These are intended decision-support use cases. Quantified business impact has not been independently measured in this project.
-
-## Current Limitations
-
-\- Six warning-level data quality rules fail and require investigation.
-
-\- The Customer Voice rebuild did not overwrite the existing persisted output.
-
-\- AI-generated reasoning requires human review.
-
-\- The dataset is historical rather than live operational data.
-
-\- Power BI opening and manual refresh were verified, but deployment, scheduled refresh, and service-level access controls have not been established by these checks.
-
-## Future Enhancements
-
-\- Add a clean-environment installation and reproducible end-to-end setup.
-
-\- Investigate and document the six warning-level data quality failures.
-
-\- Add automated data freshness and pipeline observability.
-
-\- Formalize metric definitions and semantic-model documentation.
-
-\- Improve the traceability of AI reasoning from source evidence to reviewed decisions.
-
-\- Document Power BI measures, report pages, and refresh dependencies.
-
-\- Add business-facing case studies that connect analytical findings to proposed actions and measurable outcomes.
-
-## Author's Note
-
-This is an end-to-end project focused on analytics engineering, data quality, business intelligence, and AI-assisted decision support. It emphasizes validated outputs, explicit limitations, and reproducible engineering practices over unsupported performance claims.
+**Mamidi Khushika Reddy** · [GitHub](https://github.com/mamidikhushikareddy)
