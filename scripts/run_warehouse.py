@@ -14,7 +14,7 @@ def main() -> None:
         mapping_path=MAPPING_PATH,
         staging_dir=STAGING_DIR,
         calendar_start_date="2016-01-01",
-        calendar_end_date="2018-12-31",
+        calendar_end_date="2020-04-09",
     )
 
     saved_paths = save_all_warehouse_tables(

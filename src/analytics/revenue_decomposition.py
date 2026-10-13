@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,8 +18,16 @@ REQUIRED_MARTS = {
 }
 
 
+# Explicitly governed partial periods.
+# Keep these periods in the output, but identify them for reporting.
+KNOWN_PARTIAL_MONTHS = {
+    pd.Timestamp("2018-09-01"),
+}
+
+
 OUTPUT_COLUMNS = [
     "month",
+    "is_partial_month",
     "revenue",
     "freight_value",
     "order_count",
@@ -52,7 +61,9 @@ def _load_mart(path: Path, required_columns: list[str]) -> pd.DataFrame:
 
 def _validate_monthly_series(df: pd.DataFrame) -> None:
     if df.empty:
-        raise RevenueDecompositionError("Revenue decomposition input is empty.")
+        raise RevenueDecompositionError(
+            "Revenue decomposition input is empty."
+        )
 
     if df["month"].duplicated().any():
         raise RevenueDecompositionError(
@@ -92,18 +103,17 @@ def build_revenue_decomposition(
     Build the governed monthly revenue decomposition.
 
     Grain:
-        One row per calendar month.
+        One row per observed calendar month.
 
     Revenue and freight are sourced from the product-performance mart.
-
     Order and customer counts are sourced from their respective
-    non-duplicating analytical grains.
+    analytical grains.
 
     Revenue decomposition uses a two-factor bridge:
 
         Revenue = Orders × AOV
 
-    For month t versus month t-1:
+    For month t versus the previous observed month:
 
         Order volume effect =
             (Orders_t - Orders_t-1) × AOV_t-1
@@ -111,8 +121,9 @@ def build_revenue_decomposition(
         AOV effect =
             Orders_t × (AOV_t - AOV_t-1)
 
-    The two effects reconcile exactly to observed revenue change,
-    subject only to floating-point precision.
+    Known partial periods remain in the output and are identified
+    through is_partial_month. Comparisons use the previous observed
+    month, which may not be a contiguous calendar month.
     """
     marts_dir = Path(marts_dir)
 
@@ -141,10 +152,8 @@ def build_revenue_decomposition(
         ],
     )
 
-    # Product-market mart is intentionally loaded and validated here
-    # because it is a governed diagnostic source for downstream
-    # product-market investigation. It is not used to calculate
-    # overall monthly orders or customers.
+    # Validate the product-market mart as a governed diagnostic source.
+    # It is not used to calculate overall monthly orders or customers.
     product_market = _load_mart(
         marts_dir / REQUIRED_MARTS["product_market"],
         [
@@ -172,9 +181,12 @@ def build_revenue_decomposition(
         errors="raise",
     )
 
-    # Product mart is at date × product grain.
-    # Revenue and freight are additive across product rows and dates.
-    product["month"] = product["date"].dt.to_period("M").dt.to_timestamp()
+    # Product mart grain: date × product.
+    product["month"] = (
+        product["date"]
+        .dt.to_period("M")
+        .dt.to_timestamp()
+    )
 
     monthly_product = (
         product.groupby("month", as_index=False)
@@ -184,9 +196,7 @@ def build_revenue_decomposition(
         )
     )
 
-    # Customer mart is at month × customer grain.
-    # Therefore counting rows gives the monthly distinct-customer
-    # population represented by the governed customer mart.
+    # Customer mart grain: month × customer_unique_id.
     monthly_customer = (
         customer.groupby("month", as_index=False)
         .agg(
@@ -194,11 +204,9 @@ def build_revenue_decomposition(
         )
     )
 
-    # Market mart is at month × ZIP-prefix grain.
-    # IMPORTANT:
-    # order_count is NOT summed here because one order belongs to one
-    # customer ZIP-prefix market, so this mart can safely provide the
-    # monthly order population.
+    # Market mart grain: month × ZIP-prefix market.
+    # Orders can be summed across markets under the governed
+    # one-market-per-order mapping.
     monthly_market = (
         market.groupby("month", as_index=False)
         .agg(
@@ -206,6 +214,8 @@ def build_revenue_decomposition(
         )
     )
 
+    # Preserve the existing inner-join contract: only months represented
+    # in all three calculation sources are included.
     result = monthly_product.merge(
         monthly_customer,
         on="month",
@@ -225,7 +235,17 @@ def build_revenue_decomposition(
             "No overlapping months exist across required marts."
         )
 
-    result = result.sort_values("month").reset_index(drop=True)
+    result = (
+        result.sort_values("month")
+        .reset_index(drop=True)
+    )
+
+    # Keep partial months in the result and explicitly identify them.
+    result["is_partial_month"] = (
+        result["month"]
+        .isin(KNOWN_PARTIAL_MONTHS)
+        .astype(bool)
+    )
 
     result["avg_order_value"] = (
         result["revenue"] / result["order_count"]
@@ -235,13 +255,9 @@ def build_revenue_decomposition(
         result["revenue"] / result["customer_count"]
     )
 
-    result["revenue_change"] = (
-        result["revenue"].diff()
-    )
+    result["revenue_change"] = result["revenue"].diff()
 
-    result["order_count_change"] = (
-        result["order_count"].diff()
-    )
+    result["order_count_change"] = result["order_count"].diff()
 
     result["avg_order_value_change"] = (
         result["avg_order_value"].diff()
@@ -260,7 +276,8 @@ def build_revenue_decomposition(
         * (result["avg_order_value"] - previous_aov)
     )
 
-    # First month has no prior-period comparison.
+    # The first observed month has no prior comparison.
+    # Preserve the existing metric-registry convention.
     first_month = result.index[0]
 
     result.loc[
@@ -288,8 +305,12 @@ def build_revenue_decomposition(
     if not (bridge_difference <= 1e-6).all():
         bad_rows = result.loc[
             bridge_difference > 1e-6,
-            ["month", "revenue_change", "order_volume_effect",
-             "avg_order_value_effect"],
+            [
+                "month",
+                "revenue_change",
+                "order_volume_effect",
+                "avg_order_value_effect",
+            ],
         ]
 
         raise RevenueDecompositionError(
@@ -299,12 +320,19 @@ def build_revenue_decomposition(
 
     result = result[OUTPUT_COLUMNS].copy()
 
-    result["month"] = pd.to_datetime(result["month"])
+    result["month"] = pd.to_datetime(
+        result["month"],
+        errors="raise",
+    )
+
+    result["is_partial_month"] = (
+        result["is_partial_month"].astype(bool)
+    )
 
     numeric_columns = [
         column
         for column in OUTPUT_COLUMNS
-        if column != "month"
+        if column not in {"month", "is_partial_month"}
     ]
 
     for column in numeric_columns:

@@ -1,3 +1,4 @@
+
 from pathlib import Path
 
 import pandas as pd
@@ -129,6 +130,7 @@ def test_revenue_decomposition_grain_and_columns(tmp_path):
 
     assert list(result.columns) == [
         "month",
+        "is_partial_month",
         "revenue",
         "freight_value",
         "order_count",
@@ -176,6 +178,21 @@ def test_revenue_metrics_and_bridge(tmp_path):
         feb["order_volume_effect"]
         + feb["avg_order_value_effect"]
     ) == pytest.approx(feb["revenue_change"])
+
+
+def test_partial_final_month_remains_in_output(tmp_path):
+    marts_dir = _build_test_marts(tmp_path)
+
+    result = build_revenue_decomposition(marts_dir)
+
+    assert result["month"].tolist() == [
+        pd.Timestamp("2024-01-01"),
+        pd.Timestamp("2024-02-01"),
+    ]
+
+    assert "is_partial_month" in result.columns
+    assert result["is_partial_month"].dtype == bool
+    assert not result["is_partial_month"].any()
 
 
 def test_missing_mart_fails(tmp_path):

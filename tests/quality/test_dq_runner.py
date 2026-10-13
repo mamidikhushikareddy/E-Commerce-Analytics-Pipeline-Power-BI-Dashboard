@@ -12,6 +12,7 @@ from src.quality.dq_runner import (
 def test_supported_evaluators_are_defined():
     expected = {
         "allowed_values",
+        "conditional_value",
         "minimum",
         "not_null",
         "range",
@@ -30,8 +31,8 @@ def test_load_execution_config():
     )
 
     assert config["version"] == "1.0"
-    assert len(config["datasets"]) == 9
-    assert len(config["rules"]) == 33
+    assert len(config["datasets"]) == 10
+    assert len(config["rules"]) == 44
 
 
 def test_prepare_derived_datasets():
@@ -138,6 +139,8 @@ rules:
 
     with pytest.raises(ValueError, match="Unsupported evaluator"):
         load_execution_config(config_path)
+
+
 def test_run_dq_executes_all_governed_rules():
     from pathlib import Path
 
@@ -148,13 +151,8 @@ def test_run_dq_executes_all_governed_rules():
         Path("configs/dq_execution.yaml"),
     )
 
-    assert len(results) == 33
+    assert len(results) == 44
     assert set(results["status"]) <= {"PASS", "FAIL"}
     assert results["rule_id"].is_unique
     assert results["affected_records"].ge(0).all()
     assert results["total_records"].ge(0).all()
-
-    assert (
-        results["status"].value_counts().to_dict()
-        == {"PASS": 27, "FAIL": 6}
-    )

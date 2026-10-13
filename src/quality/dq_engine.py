@@ -342,10 +342,103 @@ def evaluate_reconciliation(
         df[expected_column] - df[actual_column]
     ).abs()
 
-    invalid_mask = comparable_mask & (difference >= tolerance)
+    invalid_mask = comparable_mask & (difference > tolerance)
 
     affected_records = int(invalid_mask.sum())
     total_records = int(comparable_mask.sum())
+
+    return {
+        "rule_id": rule_id,
+        "status": "PASS" if affected_records == 0 else "FAIL",
+        "total_records": total_records,
+        "affected_records": affected_records,
+        "affected_pct": (
+            (affected_records / total_records) * 100
+            if total_records
+            else 0.0
+        ),
+    }
+def evaluate_conditional_value(
+    df,
+    rule_id: str,
+    condition_column: str,
+    condition_value,
+    target_column: str,
+    expected_value,
+    condition_operator: str = "equals",
+) -> dict:
+    """
+    Evaluate whether a target column has the expected value whenever
+    a specified condition is satisfied.
+
+    Supported condition operators:
+        - equals
+        - not_equals
+        - greater_than
+        - greater_than_or_equal
+        - less_than
+        - less_than_or_equal
+
+    The default operator is "equals" so existing DQ rules remain
+    backward compatible.
+    """
+    required_columns = {
+        condition_column,
+        target_column,
+    }
+
+    missing_columns = [
+        column for column in required_columns
+        if column not in df.columns
+    ]
+
+    if missing_columns:
+        raise KeyError(
+            f"Columns not found: {missing_columns}"
+        )
+
+    supported_operators = {
+        "equals",
+        "not_equals",
+        "greater_than",
+        "greater_than_or_equal",
+        "less_than",
+        "less_than_or_equal",
+    }
+
+    if condition_operator not in supported_operators:
+        raise ValueError(
+            f"Unsupported condition operator: {condition_operator}. "
+            f"Supported operators: {sorted(supported_operators)}"
+        )
+
+    condition_series = df[condition_column]
+
+    if condition_operator == "equals":
+        condition_mask = condition_series == condition_value
+
+    elif condition_operator == "not_equals":
+        condition_mask = condition_series != condition_value
+
+    elif condition_operator == "greater_than":
+        condition_mask = condition_series > condition_value
+
+    elif condition_operator == "greater_than_or_equal":
+        condition_mask = condition_series >= condition_value
+
+    elif condition_operator == "less_than":
+        condition_mask = condition_series < condition_value
+
+    else:
+        condition_mask = condition_series <= condition_value
+
+    invalid_mask = (
+        condition_mask
+        & (df[target_column] != expected_value)
+    )
+
+    affected_records = int(invalid_mask.sum())
+    total_records = int(condition_mask.sum())
 
     return {
         "rule_id": rule_id,

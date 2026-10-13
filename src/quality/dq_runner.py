@@ -1,3 +1,16 @@
+
+"""
+Data-quality execution runner.
+
+This module:
+1. Loads governed DQ execution configuration.
+2. Loads configured CSV and Parquet datasets.
+3. Prepares derived datasets required by DQ checks.
+4. Executes each governed DQ rule through the appropriate evaluator.
+5. Adds execution metadata to each rule result.
+6. Returns normalized rule-level results.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,6 +20,7 @@ import yaml
 
 from src.quality.dq_engine import (
     evaluate_allowed_values,
+    evaluate_conditional_value,
     evaluate_minimum,
     evaluate_not_null,
     evaluate_range,
@@ -20,9 +34,9 @@ from src.quality.dq_preparation import (
     build_order_reconciliation_frame,
 )
 
-
 SUPPORTED_EVALUATORS = {
     "allowed_values",
+    "conditional_value",
     "minimum",
     "not_null",
     "range",
@@ -33,8 +47,10 @@ SUPPORTED_EVALUATORS = {
 }
 
 
-def load_execution_config(config_path: Path) -> dict:
+def load_execution_config(config_path: str | Path) -> dict:
     """Load and validate the DQ execution configuration."""
+    config_path = Path(config_path)
+
     if not config_path.exists():
         raise FileNotFoundError(
             f"Execution configuration not found: {config_path}"
@@ -49,11 +65,13 @@ def load_execution_config(config_path: Path) -> dict:
         config = yaml.safe_load(file)
 
     if not isinstance(config, dict):
-        raise ValueError("Execution configuration must be a mapping.")
+        raise ValueError(
+            "Execution configuration must be a mapping."
+        )
 
     required_sections = {"version", "datasets", "rules"}
-
     missing_sections = required_sections - set(config)
+
     if missing_sections:
         raise ValueError(
             f"Missing configuration sections: {sorted(missing_sections)}"
@@ -89,11 +107,14 @@ def load_execution_config(config_path: Path) -> dict:
 
 
 def load_datasets(
-    raw_dir: Path,
+    raw_dir: str | Path,
     dataset_config: dict,
 ) -> dict[str, pd.DataFrame]:
-    """Load all source datasets declared by the execution configuration."""
+    """Load configured CSV and Parquet datasets."""
     datasets: dict[str, pd.DataFrame] = {}
+
+    raw_dir = Path(raw_dir)
+    project_root = raw_dir.resolve().parent
 
     for dataset_name, dataset_definition in dataset_config.items():
         if not isinstance(dataset_definition, dict):
@@ -107,14 +128,36 @@ def load_datasets(
                 "is missing 'file'."
             )
 
-        file_path = raw_dir / dataset_definition["file"]
+        configured_path = Path(dataset_definition["file"])
+
+        if configured_path.is_absolute():
+            file_path = configured_path
+        else:
+            raw_candidate = raw_dir / configured_path
+            project_candidate = project_root / configured_path
+
+            if raw_candidate.exists():
+                file_path = raw_candidate
+            else:
+                file_path = project_candidate
 
         if not file_path.exists():
             raise FileNotFoundError(
-                f"Raw dataset not found: {file_path}"
+                f"Configured dataset '{dataset_name}' not found: "
+                f"{file_path}"
             )
 
-        datasets[dataset_name] = pd.read_csv(file_path)
+        suffix = file_path.suffix.lower()
+
+        if suffix == ".csv":
+            datasets[dataset_name] = pd.read_csv(file_path)
+        elif suffix == ".parquet":
+            datasets[dataset_name] = pd.read_parquet(file_path)
+        else:
+            raise ValueError(
+                f"Unsupported file format for dataset '{dataset_name}': "
+                f"{suffix}"
+            )
 
     return datasets
 
@@ -154,19 +197,23 @@ def execute_rule(
         )
 
     if evaluator == "unique":
+        columns = rule.get("columns")
+
+        if columns is None:
+            column = rule.get("column")
+            if column is None:
+                raise ValueError(
+                    f"Unique rule {rule_id} requires 'column' or 'columns'."
+                )
+            columns = [column]
+
+        elif isinstance(columns, str):
+            columns = [columns]
+
         return evaluate_unique(
             datasets[rule["dataset"]],
             rule_id,
-            rule["columns"],
-        )
-
-    if evaluator == "range":
-        return evaluate_range(
-            datasets[rule["dataset"]],
-            rule_id,
-            rule["column"],
-            rule["minimum"],
-            rule["maximum"],
+            columns,
         )
 
     if evaluator == "minimum":
@@ -176,6 +223,47 @@ def execute_rule(
             rule["column"],
             rule["minimum"],
         )
+
+    if evaluator == "range":
+        minimum = rule.get("min_value")
+        maximum = rule.get("max_value")
+
+        if minimum is None and maximum is None:
+            raise ValueError(
+                f"Range rule {rule_id} must define min_value or max_value."
+            )
+
+        df = datasets[rule["dataset"]]
+        column = rule["column"]
+
+        if column not in df.columns:
+            raise KeyError(f"Column not found: {column}")
+
+        invalid_mask = df[column].notna()
+
+        if minimum is not None:
+            invalid_mask &= df[column] >= minimum
+
+        if maximum is not None:
+            invalid_mask &= df[column] <= maximum
+
+        # Values outside the permitted bounds are invalid.
+        invalid_mask = df[column].notna() & ~invalid_mask
+
+        affected_records = int(invalid_mask.sum())
+        total_records = len(df)
+
+        return {
+            "rule_id": rule_id,
+            "status": "PASS" if affected_records == 0 else "FAIL",
+            "total_records": total_records,
+            "affected_records": affected_records,
+            "affected_pct": (
+                affected_records / total_records * 100
+                if total_records
+                else 0.0
+            ),
+        }
 
     if evaluator == "reference_integrity":
         return evaluate_reference_integrity(
@@ -187,20 +275,47 @@ def execute_rule(
         )
 
     if evaluator == "temporal_order":
+        earlier_column = rule.get(
+            "earlier_column",
+            rule.get("start_column"),
+        )
+        later_column = rule.get(
+            "later_column",
+            rule.get("end_column"),
+        )
+
+        if earlier_column is None or later_column is None:
+            raise ValueError(
+                f"Temporal rule {rule_id} must define "
+                "'earlier_column'/'later_column' or "
+                "'start_column'/'end_column'."
+            )
+
         return evaluate_temporal_order(
             datasets[rule["dataset"]],
             rule_id,
-            rule["earlier_column"],
-            rule["later_column"],
+            earlier_column,
+            later_column,
         )
 
     if evaluator == "reconciliation":
-        return evaluate_reconciliation(
-            datasets[rule["dataset"]],
-            rule_id,
-            rule["expected_column"],
-            rule["actual_column"],
-            rule["tolerance"],
+        # Original financial reconciliation format.
+        if (
+            "dataset" in rule
+            and "expected_column" in rule
+            and "actual_column" in rule
+        ):
+            return evaluate_reconciliation(
+                datasets[rule["dataset"]],
+                rule_id,
+                rule["expected_column"],
+                rule["actual_column"],
+                rule.get("tolerance", 0.0),
+            )
+
+        raise ValueError(
+            f"Unsupported reconciliation configuration for rule {rule_id}. "
+            "Expected dataset, expected_column, and actual_column."
         )
 
     if evaluator == "allowed_values":
@@ -211,14 +326,25 @@ def execute_rule(
             set(rule["allowed_values"]),
         )
 
+    if evaluator == "conditional_value":
+        return evaluate_conditional_value(
+            datasets[rule["dataset"]],
+            rule_id,
+            rule["condition_column"],
+            rule["condition_value"],
+            rule["target_column"],
+            rule["expected_value"],
+            rule.get("operator", "equals"),
+        )
+
     raise ValueError(
         f"Unsupported evaluator '{evaluator}' for rule {rule_id}."
     )
 
 
 def run_dq(
-    raw_dir: Path,
-    execution_config_path: Path,
+    raw_dir: str | Path,
+    execution_config_path: str | Path,
 ) -> pd.DataFrame:
     """Execute the governed DQ rule set and return structured results."""
     config = load_execution_config(execution_config_path)

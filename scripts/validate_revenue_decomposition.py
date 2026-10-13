@@ -16,6 +16,7 @@ INPUT_PATH = (
 
 EXPECTED_COLUMNS = [
     "month",
+    "is_partial_month",
     "revenue",
     "freight_value",
     "order_count",
@@ -48,17 +49,50 @@ def main() -> None:
     if df.empty:
         raise ValueError("Revenue decomposition output is empty.")
 
-    if df["month"].duplicated().any():
-        raise ValueError("Duplicate month rows detected.")
-
     if df["month"].isna().any():
         raise ValueError("Null month values detected.")
 
-    if df["revenue"].isna().any():
-        raise ValueError("Null revenue values detected.")
+    if not pd.api.types.is_bool_dtype(df["is_partial_month"]):
+        raise TypeError("is_partial_month must have boolean dtype.")
 
-    if df["freight_value"].isna().any():
-        raise ValueError("Null freight values detected.")
+    if df["is_partial_month"].isna().any():
+        raise ValueError("Null is_partial_month values detected.")
+
+    if df["month"].duplicated().any():
+        raise ValueError("Duplicate month rows detected.")
+
+    if not df["month"].is_monotonic_increasing:
+        raise ValueError("Months are not sorted in ascending order.")
+
+    expected_partial_months = {pd.Timestamp("2018-09-01")}
+    actual_partial_months = set(
+        df.loc[df["is_partial_month"], "month"]
+        .dt.to_period("M")
+        .dt.to_timestamp()
+    )
+
+    if actual_partial_months != expected_partial_months:
+        raise ValueError(
+            "Unexpected partial-month flags.\n"
+            f"Expected: {sorted(expected_partial_months)}\n"
+            f"Actual: {sorted(actual_partial_months)}"
+        )
+
+    for column in [
+        "revenue",
+        "freight_value",
+        "order_count",
+        "customer_count",
+        "avg_order_value",
+        "revenue_per_customer",
+        "revenue_change",
+        "order_count_change",
+        "avg_order_value_change",
+        "order_volume_effect",
+        "avg_order_value_effect",
+    ]:
+        if df[column].isna().any():
+            raise ValueError(f"Null values detected in {column}.")
 
     if (df["revenue"] < 0).any():
         raise ValueError("Negative revenue detected.")
@@ -109,6 +143,10 @@ def main() -> None:
     print(f"Rows: {len(df):,}")
     print(f"Columns: {len(df.columns):,}")
     print(f"Duplicate month rows: {df['month'].duplicated().sum():,}")
+    print(
+        "Partial months: "
+        f"{df.loc[df['is_partial_month'], 'month'].dt.strftime('%Y-%m').tolist()}"
+    )
     print(f"Revenue: {df['revenue'].sum():,.2f}")
     print(f"Freight: {df['freight_value'].sum():,.2f}")
     print(

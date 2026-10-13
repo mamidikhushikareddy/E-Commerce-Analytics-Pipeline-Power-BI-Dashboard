@@ -6,6 +6,7 @@ import pandas as pd
 
 from src.quality.dq_engine import (
     evaluate_allowed_values,
+    evaluate_conditional_value,
     evaluate_minimum,
     evaluate_not_null,
     evaluate_range,
@@ -23,7 +24,7 @@ RULES_PATH = PROJECT_ROOT / "configs" / "dq_rules.yaml"
 def test_load_rules_returns_all_governed_rules():
     rules = load_rules(RULES_PATH)
 
-    assert len(rules) == 33
+    assert len(rules) == 44
 
 
 def test_rule_ids_are_unique():
@@ -571,4 +572,66 @@ def test_evaluate_reconciliation_raises_for_missing_column():
             expected_column="expected",
             actual_column="actual",
             tolerance=0.01,
+        )
+def test_evaluate_conditional_value_passes_when_condition_is_satisfied():
+    df = pd.DataFrame(
+        {
+            "transition_count": [0, 0, 1, 2],
+            "evidence_level": ["NONE", "NONE", "LOW", "MEDIUM"],
+        }
+    )
+
+    result = evaluate_conditional_value(
+        df,
+        rule_id="TEST-COND-001",
+        condition_column="transition_count",
+        condition_value=0,
+        target_column="evidence_level",
+        expected_value="NONE",
+    )
+
+    assert result["status"] == "PASS"
+    assert result["total_records"] == 2
+    assert result["affected_records"] == 0
+    assert result["affected_pct"] == 0.0
+
+def test_evaluate_conditional_value_supports_greater_than_or_equal():
+    df = pd.DataFrame(
+        {
+            "transition_count": [0, 1, 2, 3],
+            "evidence_level": ["NONE", "LOW", "MEDIUM", "HIGH"],
+        }
+    )
+
+    result = evaluate_conditional_value(
+        df,
+        rule_id="TEST-COND-002",
+        condition_column="transition_count",
+        condition_value=1,
+        condition_operator="greater_than_or_equal",
+        target_column="evidence_level",
+        expected_value="LOW",
+    )
+
+    assert result["status"] == "FAIL"
+    assert result["total_records"] == 3
+    assert result["affected_records"] == 2
+    assert result["affected_pct"] == pytest.approx(66.6666666667)
+def test_evaluate_conditional_value_rejects_unsupported_operator():
+    df = pd.DataFrame(
+        {
+            "transition_count": [0, 1],
+            "evidence_level": ["NONE", "LOW"],
+        }
+    )
+
+    with pytest.raises(ValueError):
+        evaluate_conditional_value(
+            df,
+            rule_id="TEST-COND-003",
+            condition_column="transition_count",
+            condition_value=1,
+            condition_operator="unsupported_operator",
+            target_column="evidence_level",
+            expected_value="LOW",
         )
