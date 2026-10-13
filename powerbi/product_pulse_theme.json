@@ -1,0 +1,49 @@
+
+{
+  "name": "Product Pulse AI - Modern Teal",
+  "dataColors": [
+    "#0F8B8D",
+    "#172B4D",
+    "#62B6A5",
+    "#5B8DB8",
+    "#D99A2B",
+    "#8B7BB5",
+    "#64748B",
+    "#C64C4C"
+  ],
+  "background": "#F5F7FA",
+  "foreground": "#172B4D",
+  "tableAccent": "#0F8B8D",
+  "good": "#16805D",
+  "neutral": "#D99A2B",
+  "bad": "#C64C4C",
+  "visualStyles": {
+    "*": {
+      "*": {
+        "title": [
+          {
+            "show": true,
+            "fontFamily": "Segoe UI",
+            "fontSize": 12,
+            "fontColor": {
+              "solid": {
+                "color": "#172B4D"
+              }
+            }
+          }
+        ],
+        "background": [
+          {
+            "show": true,
+            "color": {
+              "solid": {
+                "color": "#FFFFFF"
+              }
+            },
+            "transparency": 0
+          }
+        ]
+      }
+    }
+  }
+}
